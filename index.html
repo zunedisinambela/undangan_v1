@@ -1393,6 +1393,76 @@
   }
   .names-frame::before{ top: 0; }
   .names-frame::after{ bottom: 0; }
+
+  /* ===== PERBAIKAN RESPONSIVE MOBILE ===== */
+  @media (max-width: 600px){
+    /* Hero butuh padding lebih besar agar tidak tabrakan dengan panel ulos */
+    .hero{
+      padding: 2rem 3rem;
+    }
+
+    /* Date strip lebih ringkas di mobile */
+    .date-strip{
+      gap: 1rem;
+      margin-top: 2rem;
+      flex-wrap: nowrap;
+    }
+    .date-strip .num{
+      font-size: 1.5rem;
+    }
+    .date-strip .label{
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+    }
+    .date-divider{
+      height: 38px;
+    }
+
+    /* Bingkai pita ulos di nama mempelai */
+    .names-frame::before,
+    .names-frame::after{
+      width: 100%;
+      height: 10px;
+    }
+    .names-frame{
+      padding: 1.5rem 0;
+    }
+
+    /* Marga lebih kecil supaya muat */
+    .marga{
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      padding: 0 0.5rem;
+    }
+
+    /* Salam pembuka */
+    .horas{
+      letter-spacing: 0.5em;
+      font-size: 0.65rem;
+    }
+
+    /* Scroll cue tetap di tengah, tidak tabrak ulos */
+    .scroll-cue{
+      font-size: 0.75rem;
+      padding: 0 3.5rem;
+    }
+  }
+
+  @media (max-width: 380px){
+    /* Layar sangat kecil */
+    .hero{
+      padding: 2rem 2.5rem;
+    }
+    .date-strip{
+      gap: 0.7rem;
+    }
+    .date-strip .num{
+      font-size: 1.3rem;
+    }
+    .date-divider{
+      height: 32px;
+    }
+  }
 </style>
 </head>
 <body class="locked">
