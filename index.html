@@ -751,6 +751,61 @@
     to{ transform: rotate(360deg) }
   }
 
+  /* ===== TOMBOL MUSIK LATAR (Batak) ===== */
+  .music-toggle{
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9998;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: 1px solid var(--gold);
+    background: radial-gradient(circle at 30% 28%, var(--ink-soft), var(--black-warm));
+    color: var(--gold-pale);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    transition: transform .3s ease, box-shadow .3s ease, opacity .5s ease;
+  }
+  .music-toggle:hover{
+    transform: scale(1.08);
+    box-shadow: 0 10px 28px rgba(139,26,26,0.4);
+  }
+  .music-toggle svg{ width: 22px; height: 22px; }
+  /* cincin emas berputar saat musik berbunyi */
+  .music-toggle::before{
+    content:'';
+    position:absolute;
+    inset:-4px;
+    border-radius:50%;
+    border:1px solid transparent;
+    border-top-color: var(--gold);
+    border-right-color: rgba(184,137,58,0.35);
+    opacity:0;
+    transition: opacity .4s ease;
+  }
+  .music-toggle.playing::before{
+    opacity:1;
+    animation: spin 4s linear infinite;
+  }
+  /* pertukaran ikon main / bisu */
+  .music-toggle .icon-muted{ display:none; }
+  .music-toggle.muted .icon-playing{ display:none; }
+  .music-toggle.muted .icon-muted{ display:block; }
+  /* sembunyikan tombol selama sampul masih tertutup */
+  body.locked .music-toggle{
+    opacity:0;
+    pointer-events:none;
+    transform: scale(.7);
+  }
+  @media (max-width: 600px){
+    .music-toggle{ width:48px; height:48px; bottom:1rem; right:1rem; }
+    .music-toggle svg{ width:20px; height:20px; }
+  }
+
   .cover-label{
     font-family: 'Cormorant Upright', serif;
     font-style: italic;
@@ -1692,6 +1747,33 @@
 </head>
 <body class="locked">
 
+<!-- ===== MUSIK LATAR (lagu Batak: TobaDream - Theme Song) ===== -->
+<!-- Urutan pemutaran:
+     1) musik/batak.mp3  -> berkas lokal milik Anda (paling andal), bila ada
+     2) tautan TobaDream  -> diambil langsung dari internet
+     3) bila keduanya gagal, melodi bawaan (Web Audio) otomatis berbunyi -->
+<audio id="bg-music" loop preload="auto">
+  <source src="musik/batak.mp3" type="audio/mpeg">
+  <source src="https://web.galeriundanganofficial.com/wp-content/uploads/2025/11/TobaDream-Theme-Song-mp3cut.net_.mp3" type="audio/mpeg">
+</audio>
+
+<!-- Tombol nyala/bisu musik -->
+<button class="music-toggle" id="music-toggle" aria-label="Nyalakan atau matikan musik" title="Musik">
+  <!-- ikon saat musik menyala -->
+  <svg class="icon-playing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 18V5l10-2v13"/>
+    <circle cx="6" cy="18" r="3"/>
+    <circle cx="16" cy="16" r="3"/>
+  </svg>
+  <!-- ikon saat musik bisu -->
+  <svg class="icon-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 18V5l10-2v13"/>
+    <circle cx="6" cy="18" r="3"/>
+    <circle cx="16" cy="16" r="3"/>
+    <line x1="3" y1="3" x2="22" y2="22" stroke="var(--crimson)"/>
+  </svg>
+</button>
+
 <!-- ===== COVER / HALAMAN PEMBUKA ===== -->
 <div class="cover" id="cover">
   <img class="cover-photo" data-photo="DSC_1744" alt="Zunedi &amp; Lenni dalam balutan adat Batak">
@@ -2606,6 +2688,9 @@ const WEDDING_PHOTOS = {
     cover.classList.add('opened');
     document.body.classList.remove('locked');
 
+    // Pastikan musik berbunyi (kalau belum) saat undangan dibuka
+    startMusicNow();
+
     // Scroll halus ke atas konten utama
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2615,6 +2700,196 @@ const WEDDING_PHOTOS = {
     setTimeout(() => {
       cover.style.display = 'none';
     }, 1400);
+  });
+
+  // ===== MUSIK LATAR =====
+  const bgMusic = document.getElementById('bg-music');
+  const musicBtn = document.getElementById('music-toggle');
+  let synth = null;        // melodi bawaan (Web Audio) sebagai cadangan
+  let usingSynth = false;
+
+  // ---- Melodi bernuansa Batak yang dibuat langsung oleh browser ----
+  // Tidak butuh berkas apa pun, jadi pasti berbunyi.
+  function buildSynth(){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return null;
+    const ctx = new AC();
+    const master = ctx.createGain();
+    master.gain.value = 0.0001;
+    master.connect(ctx.destination);
+
+    const beat = 0.46;                 // tempo lembut
+    const G3=196, G4=392, A4=440, B4=493.88, D5=587.33, E5=659.25; // tangga nada pentatonik
+    // [frekuensi, jumlah ketuk]
+    const phrase = [
+      [B4,1],[A4,1],[G4,1],[A4,1],
+      [B4,1],[D5,1],[B4,2],
+      [A4,1],[G4,1],[E5,1],[D5,1],
+      [B4,1],[A4,1],[G4,2],
+    ];
+
+    let running = false, nextTime = 0, timer = null;
+
+    function note(freq, t, beats){
+      const dur = beats * beat;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = freq;
+      o.connect(g); g.connect(master);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.2, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + dur * 0.95);
+      o.start(t); o.stop(t + dur + 0.05);
+      // kilau satu oktaf di atas
+      const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+      o2.type = 'sine'; o2.frequency.value = freq * 2;
+      o2.connect(g2); g2.connect(master);
+      g2.gain.setValueAtTime(0, t);
+      g2.gain.linearRampToValueAtTime(0.05, t + 0.03);
+      g2.gain.exponentialRampToValueAtTime(0.0005, t + dur * 0.9);
+      o2.start(t); o2.stop(t + dur + 0.05);
+    }
+    function drum(t){           // ketukan rendah seperti gondang
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(55, t + 0.18);
+      g.gain.setValueAtTime(0.22, t);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + 0.3);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.35);
+    }
+    function bass(freq, t, dur){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.12, t + 0.1);
+      g.gain.setValueAtTime(0.12, t + dur - 0.2);
+      g.gain.exponentialRampToValueAtTime(0.0006, t + dur);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+    }
+    function schedulePhrase(start){
+      const totalBeats = phrase.reduce((s,n) => s + n[1], 0);
+      bass(G3, start, totalBeats * beat);
+      let t = start, count = 0;
+      phrase.forEach(([f,d]) => {
+        note(f, t, d);
+        if(Math.round(count) % 4 === 0) drum(t);
+        count += d; t += d * beat;
+      });
+      return totalBeats * beat;
+    }
+    function loop(){
+      if(!running) return;
+      const dur = schedulePhrase(nextTime);
+      nextTime += dur;
+      const ahead = (nextTime - ctx.currentTime - 0.2) * 1000;
+      timer = setTimeout(loop, Math.max(50, ahead));
+    }
+    return {
+      start(){
+        if(ctx.state === 'suspended') ctx.resume();
+        running = true;
+        nextTime = ctx.currentTime + 0.1;
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.setValueAtTime(Math.max(master.gain.value,0.0001), ctx.currentTime);
+        master.gain.linearRampToValueAtTime(0.32, ctx.currentTime + 1.5);
+        loop();
+      },
+      stop(){
+        running = false;
+        if(timer) clearTimeout(timer);
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+        master.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+      },
+      get paused(){ return !running; }
+    };
+  }
+
+  function startSynth(){
+    if(usingSynth) return;          // cegah dobel
+    if(!synth) synth = buildSynth();
+    if(!synth){ musicBtn.classList.add('muted'); return; }
+    usingSynth = true;
+    musicReady = true;
+    synth.start();
+    musicBtn.classList.add('playing');
+    musicBtn.classList.remove('muted');
+  }
+
+  let musicReady = false;          // sudah berhasil mulai?
+
+  function markPlaying(){
+    musicReady = true;
+    usingSynth = false;
+    musicBtn.classList.add('playing');
+    musicBtn.classList.remove('muted');
+  }
+
+  // Coba putar lagu (berkas lokal -> tautan TobaDream). Mengembalikan Promise.
+  function tryPlayFile(){
+    bgMusic.volume = 0.6;
+    return bgMusic.play();
+  }
+
+  // (1) Coba autoplay SEGERA saat halaman dibuka.
+  //     Bila browser memblokir, JANGAN pakai melodi cadangan dulu —
+  //     tunggu sentuhan pertama lalu coba lagu asli lagi.
+  function attemptAutoplay(){
+    if(musicReady || !bgMusic) return;
+    const p = tryPlayFile();
+    if(p && typeof p.then === 'function'){
+      p.then(markPlaying).catch(() => { /* diblokir browser, tunggu interaksi */ });
+    }
+  }
+
+  // (2) Dipanggil saat tamu pertama kali menyentuh / klik / geser di mana saja.
+  function startMusicNow(){
+    if(musicReady || !bgMusic) return;
+    const p = tryPlayFile();
+    if(p && typeof p.then === 'function'){
+      p.then(markPlaying).catch(() => startSynth());  // lagu gagal dimuat → melodi bawaan
+    } else {
+      startSynth();
+    }
+  }
+
+  // Pasang pemicu pada interaksi pertama (sentuh, klik, tombol, atau geser) di seluruh halaman.
+  (function armFirstInteraction(){
+    const events = ['pointerdown', 'touchstart', 'keydown', 'scroll', 'click'];
+    function handler(){
+      startMusicNow();
+      events.forEach(ev => document.removeEventListener(ev, handler, true));
+    }
+    events.forEach(ev => document.addEventListener(ev, handler, { capture: true, passive: true }));
+  })();
+
+  // Jalankan upaya autoplay langsung saat skrip dimuat.
+  attemptAutoplay();
+
+  // Klik tombol untuk menyalakan / membisukan
+  musicBtn.addEventListener('click', () => {
+    if(usingSynth){
+      if(synth.paused){
+        synth.start();
+        musicBtn.classList.add('playing');
+        musicBtn.classList.remove('muted');
+      } else {
+        synth.stop();
+        musicBtn.classList.remove('playing');
+        musicBtn.classList.add('muted');
+      }
+      return;
+    }
+    if(bgMusic.paused){
+      const p = bgMusic.play();
+      if(p && typeof p.then === 'function'){ p.then(markPlaying).catch(() => startSynth()); }
+      musicBtn.classList.add('playing');
+      musicBtn.classList.remove('muted');
+    } else {
+      bgMusic.pause();
+      musicBtn.classList.remove('playing');
+      musicBtn.classList.add('muted');
+    }
   });
 
   // ===== COUNTDOWN =====
